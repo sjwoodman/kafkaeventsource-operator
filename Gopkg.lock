@@ -260,7 +260,7 @@
     "version",
   ]
   pruneopts = "NT"
-  revision = "898e23cc2efbe99239b5830a56237489e28f457d"
+  revision = "c627d62c77f4b5b9d80b2cd60fa0386806f9f763"
 
 [[projects]]
   digest = "1:93b1d84c5fa6d1ea52f4114c37714cddd84d5b78f151b62bb101128dd51399bf"
@@ -350,7 +350,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:b17011812136abe011d81b40b30470808df923687e831760511d878408d208df"
+  digest = "1:4274e499d3ba3b75ced5f11c7309b73fdb20fcd16fac58521405288b3f814e60"
   name = "golang.org/x/oauth2"
   packages = [
     ".",
@@ -360,7 +360,7 @@
     "jwt",
   ]
   pruneopts = "NT"
-  revision = "e0f2c55a7fc7d04742e0eef7918aa2389b0e1919"
+  revision = "232e45548389bd9357411a6922a07c5fd4068bda"
 
 [[projects]]
   branch = "master"
@@ -407,7 +407,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:d9646d2cb3517e532bcc75614352e589c5f26e6d1b8ae2587eaef0c7c60cea3a"
+  digest = "1:0384cf28db2c82643fa39255b5dd16ad460ff2916111f19e9c7b7b23e4aa8a6c"
   name = "golang.org/x/tools"
   packages = [
     "go/ast/astutil",
@@ -416,7 +416,7 @@
     "internal/gopathwalk",
   ]
   pruneopts = "NT"
-  revision = "92b943e6bff73e0dfe9e975d94043d8f31067b06"
+  revision = "96e9e165b75e735822645eff82850b08c377be36"
 
 [[projects]]
   digest = "1:2a4972ee51c3b9dfafbb3451fa0552e7a198d9d12c721bfc492050fe2f72e0f6"

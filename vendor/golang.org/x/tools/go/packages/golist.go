@@ -16,10 +16,14 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/tools/internal/gopathwalk"
 	"golang.org/x/tools/internal/semver"
 )
+
+// debug controls verbose logging.
+const debug = false
 
 // A goTooOldError reports that the go command
 // found by exec.LookPath is too old to use the new go list behavior.
@@ -173,6 +177,10 @@ func runContainsQueries(cfg *Config, driver driver, addPkg func(*Package), queri
 var modCacheRegexp = regexp.MustCompile(`(.*)@([^/\\]*)(.*)`)
 
 func runNamedQueries(cfg *Config, driver driver, addPkg func(*Package), queries []string) ([]string, error) {
+	// calling `go env` isn't free; bail out if there's nothing to do.
+	if len(queries) == 0 {
+		return nil, nil
+	}
 	// Determine which directories are relevant to scan.
 	roots, modRoot, err := roots(cfg)
 	if err != nil {
@@ -209,7 +217,12 @@ func runNamedQueries(cfg *Config, driver driver, addPkg func(*Package), queries 
 			}
 		}
 	}
-	gopathwalk.Walk(roots, add, gopathwalk.Options{ModulesEnabled: modRoot != ""})
+
+	startWalk := time.Now()
+	gopathwalk.Walk(roots, add, gopathwalk.Options{ModulesEnabled: modRoot != "", Debug: debug})
+	if debug {
+		log.Printf("%v for walk", time.Since(startWalk))
+	}
 
 	// Weird special case: the top-level package in a module will be in
 	// whatever directory the user checked the repository out into. It's
@@ -286,6 +299,12 @@ func runNamedQueries(cfg *Config, driver driver, addPkg func(*Package), queries 
 		gomod.WriteString(")\n")
 
 		tmpCfg := *cfg
+
+		// We're only trying to look at stuff in the module cache, so
+		// disable the network. This should speed things up, and has
+		// prevented errors in at least one case, #28518.
+		tmpCfg.Env = append(append([]string{"GOPROXY=off"}, cfg.Env...))
+
 		var err error
 		tmpCfg.Dir, err = ioutil.TempDir("", "gopackages-modquery")
 		if err != nil {
@@ -591,6 +610,9 @@ func golistargs(cfg *Config, words []string) []string {
 
 // invokeGo returns the stdout of a go command invocation.
 func invokeGo(cfg *Config, args ...string) (*bytes.Buffer, error) {
+	if debug {
+		defer func(start time.Time) { log.Printf("%s for %v", time.Since(start), cmdDebugStr(cfg, args...)) }(time.Now())
+	}
 	stdout := new(bytes.Buffer)
 	stderr := new(bytes.Buffer)
 	cmd := exec.CommandContext(cfg.Context, "go", args...)
@@ -634,13 +656,24 @@ func invokeGo(cfg *Config, args ...string) (*bytes.Buffer, error) {
 	// be useful for debugging. Print them if $GOPACKAGESPRINTGOLISTERRORS
 	// is set.
 	if len(stderr.Bytes()) != 0 && os.Getenv("GOPACKAGESPRINTGOLISTERRORS") != "" {
-		fmt.Fprintf(os.Stderr, "go %v stderr: <<%s>>\n", args, stderr)
+		fmt.Fprintf(os.Stderr, "%s stderr: <<%s>>\n", cmdDebugStr(cfg, args...), stderr)
 	}
 
 	// debugging
 	if false {
-		fmt.Fprintf(os.Stderr, "go %v stdout: <<%s>>\n", args, stdout)
+		fmt.Fprintf(os.Stderr, "%s stdout: <<%s>>\n", cmdDebugStr(cfg, args...), stdout)
 	}
 
 	return stdout, nil
+}
+
+func cmdDebugStr(cfg *Config, args ...string) string {
+	env := make(map[string]string)
+	for _, kv := range cfg.Env {
+		split := strings.Split(kv, "=")
+		k, v := split[0], split[1]
+		env[k] = v
+	}
+
+	return fmt.Sprintf("GOROOT=%v GOPATH=%v GO111MODULE=%v PWD=%v go %v", env["GOROOT"], env["GOPATH"], env["GO111MODULE"], env["PWD"], args)
 }

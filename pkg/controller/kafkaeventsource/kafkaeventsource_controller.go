@@ -1,4 +1,4 @@
-package kafkasource
+package kafkaeventsource
 
 import (
 	"context"
@@ -25,7 +25,7 @@ import (
 * business logic.  Delete these comments after modifying this file.*
  */
 
-// Add creates a new KafkaSource Controller and adds it to the Manager. The Manager will set fields on the Controller
+// Add creates a new KafkaEventSource Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
 	return add(mgr, newReconciler(mgr))
@@ -33,31 +33,28 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileKafkaSource{client: mgr.GetClient(), scheme: mgr.GetScheme()}
+	return &ReconcileKafkaEventSource{client: mgr.GetClient(), scheme: mgr.GetScheme()}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
-
-	log.Printf("Add\n")
-
 	// Create a new controller
-	c, err := controller.New("kafkasource-controller", mgr, controller.Options{Reconciler: r})
+	c, err := controller.New("kafkaeventsource-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
 		return err
 	}
 
-	// Watch for changes to primary resource KafkaSource
-	err = c.Watch(&source.Kind{Type: &sourcesv1alpha1.KafkaSource{}}, &handler.EnqueueRequestForObject{})
+	// Watch for changes to primary resource KafkaEventSource
+	err = c.Watch(&source.Kind{Type: &sourcesv1alpha1.KafkaEventSource{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
 
 	// TODO(user): Modify this to be the types you create that are owned by the primary resource
-	// Watch for changes to secondary resource Pods and requeue the owner KafkaSource
-	err = c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
+	// Watch for changes to secondary resource Pods and requeue the owner KafkaEventSource
+	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
-		OwnerType:    &sourcesv1alpha1.KafkaSource{},
+		OwnerType:    &sourcesv1alpha1.KafkaEventSource{},
 	})
 	if err != nil {
 		return err
@@ -66,28 +63,28 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	return nil
 }
 
-var _ reconcile.Reconciler = &ReconcileKafkaSource{}
+var _ reconcile.Reconciler = &ReconcileKafkaEventSource{}
 
-// ReconcileKafkaSource reconciles a KafkaSource object
-type ReconcileKafkaSource struct {
+// ReconcileKafkaEventSource reconciles a KafkaEventSource object
+type ReconcileKafkaEventSource struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	client client.Client
 	scheme *runtime.Scheme
 }
 
-// Reconcile reads that state of the cluster for a KafkaSource object and makes changes based on the state read
-// and what is in the KafkaSource.Spec
+// Reconcile reads that state of the cluster for a KafkaEventSource object and makes changes based on the state read
+// and what is in the KafkaEventSource.Spec
 // TODO(user): Modify this Reconcile function to implement your Controller logic.  This example creates
 // a Pod as an example
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
-func (r *ReconcileKafkaSource) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	log.Printf("Reconciling KafkaSource %s/%s\n", request.Namespace, request.Name)
+func (r *ReconcileKafkaEventSource) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+	log.Printf("Reconciling KafkaEventSource %s/%s\n", request.Namespace, request.Name)
 
-	// Fetch the KafkaSource instance
-	instance := &sourcesv1alpha1.KafkaSource{}
+	// Fetch the KafkaEventSource instance
+	instance := &sourcesv1alpha1.KafkaEventSource{}
 	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -101,10 +98,9 @@ func (r *ReconcileKafkaSource) Reconcile(request reconcile.Request) (reconcile.R
 	}
 
 	// Define a new Pod object
-	// pod := newPodForCR(instance)
 	dep := deploymentForKafka(instance)
 
-	// Set KafkaSource instance as the owner and controller
+	// Set KafkaEventSource instance as the owner and controller
 	if err := controllerutil.SetControllerReference(instance, dep, r.scheme); err != nil {
 		return reconcile.Result{}, err
 	}
@@ -130,7 +126,7 @@ func (r *ReconcileKafkaSource) Reconcile(request reconcile.Request) (reconcile.R
 	return reconcile.Result{}, nil
 }
 
-func deploymentForKafka(kes *sourcesv1alpha1.KafkaSource) *appsv1.Deployment {
+func deploymentForKafka(kes *sourcesv1alpha1.KafkaEventSource) *appsv1.Deployment {
 	labels := map[string]string{
 		"app": kes.Name,
 	}
@@ -165,18 +161,11 @@ func deploymentForKafka(kes *sourcesv1alpha1.KafkaSource) *appsv1.Deployment {
 								Name:  "KAFKA_TOPIC",
 								Value: kes.Spec.Topic,
 							},
-							{
-								Name:  "TARGET",
-								Value: kes.Spec.Target,
-							},
 						},
 					}},
 				},
 			},
 		},
 	}
-
-	// Set KafkaEventSource instance as the owner and controller
-	//controllerutil.SetControllerReference(kes, dep, r.scheme)
 	return dep
 }
