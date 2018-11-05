@@ -156,6 +156,20 @@ func deploymentForKafka(kes *sourcesv1alpha1.KafkaSource) *appsv1.Deployment {
 					Containers: []corev1.Container{{
 						Image: "sjwoodman/kafkaeventsource:latest",
 						Name:  "kafkaeventsource",
+						Env: []corev1.EnvVar{
+							{
+								Name:  "KAFKA_BOOTSTRAP_SERVERS",
+								Value: kes.Spec.Bootstrap,
+							},
+							{
+								Name:  "KAFKA_TOPIC",
+								Value: kes.Spec.Topic,
+							},
+							{
+								Name:  "TARGET",
+								Value: kes.Spec.Target,
+							},
+						},
 					}},
 				},
 			},
