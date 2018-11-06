@@ -112,12 +112,11 @@ func (r *ReconcileKafkaEventSource) Reconcile(request reconcile.Request) (reconc
 
 	r.dynamicClient, _ = dynamic.NewForConfig(&rest.Config{})
 
-	sinkURI, err := sinks.GetSinkURI(r.dynamicClient, src.Spec.Sink, src.Namespace)
+	sinkURI, err := sinks.GetSinkURI(r.dynamicClient, instance.Spec.Sink, instance.Namespace)
 	if err != nil {
-		src.Status.MarkNoSink("NotFound", "")
-		return src, err
+		instance.Status.MarkNoSink("NotFound", "")
 	}
-	src.Status.MarkSink(sinkURI)
+	instance.Status.MarkSink(sinkURI)
 
 	// Check if this Pod already exists
 	found := &appsv1.Deployment{}
