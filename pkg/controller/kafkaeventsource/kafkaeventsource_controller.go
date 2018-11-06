@@ -2,6 +2,8 @@ package kafkaeventsource
 
 import (
 	"context"
+	"github.com/knative/eventing-sources/pkg/controller/sinks"
+	"k8s.io/client-go/rest"
 	"log"
 
 	sourcesv1alpha1 "github.com/rh-event-flow-incubator/kafkaeventsource-operator/pkg/apis/sources/v1alpha1"
@@ -17,6 +19,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -69,8 +73,9 @@ var _ reconcile.Reconciler = &ReconcileKafkaEventSource{}
 type ReconcileKafkaEventSource struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client client.Client
-	scheme *runtime.Scheme
+	client        client.Client
+	dynamicClient dynamic.Interface
+	scheme        *runtime.Scheme
 }
 
 // Reconcile reads that state of the cluster for a KafkaEventSource object and makes changes based on the state read
@@ -104,6 +109,15 @@ func (r *ReconcileKafkaEventSource) Reconcile(request reconcile.Request) (reconc
 	if err := controllerutil.SetControllerReference(instance, dep, r.scheme); err != nil {
 		return reconcile.Result{}, err
 	}
+
+	r.dynamicClient, _ = dynamic.NewForConfig(&rest.Config{})
+
+	sinkURI, err := sinks.GetSinkURI(r.dynamicClient, src.Spec.Sink, src.Namespace)
+	if err != nil {
+		src.Status.MarkNoSink("NotFound", "")
+		return src, err
+	}
+	src.Status.MarkSink(sinkURI)
 
 	// Check if this Pod already exists
 	found := &appsv1.Deployment{}
