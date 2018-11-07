@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/tools/internal/jsonrpc2"
 	"golang.org/x/tools/internal/lsp/protocol"
+	"golang.org/x/tools/internal/lsp/source"
 )
 
 // RunServer starts an LSP server on the supplied stream, and waits until the
@@ -28,7 +29,7 @@ type server struct {
 	initializedMu sync.Mutex
 	initialized   bool // set once the server has received "initialize" request
 
-	*view
+	view *source.View
 }
 
 func (s *server) Initialize(ctx context.Context, params *protocol.InitializeParams) (*protocol.InitializeResult, error) {
@@ -37,7 +38,7 @@ func (s *server) Initialize(ctx context.Context, params *protocol.InitializePara
 	if s.initialized {
 		return nil, jsonrpc2.NewErrorf(jsonrpc2.CodeInvalidRequest, "server already initialized")
 	}
-	s.view = newView()
+	s.view = source.NewView()
 	s.initialized = true
 	return &protocol.InitializeResult{
 		Capabilities: protocol.ServerCapabilities{
@@ -47,6 +48,9 @@ func (s *server) Initialize(ctx context.Context, params *protocol.InitializePara
 			},
 			DocumentFormattingProvider:      true,
 			DocumentRangeFormattingProvider: true,
+			CompletionProvider: protocol.CompletionOptions{
+				TriggerCharacters: []string{"."},
+			},
 		},
 	}, nil
 }
@@ -110,15 +114,13 @@ func (s *server) DidChange(ctx context.Context, params *protocol.DidChangeTextDo
 }
 
 func (s *server) cacheAndDiagnoseFile(ctx context.Context, uri protocol.DocumentURI, text string) {
-	s.view.activeFilesMu.Lock()
-	s.view.activeFiles[uri] = []byte(text)
-	s.view.activeFilesMu.Unlock()
+	s.view.GetFile(uri).SetContent([]byte(text))
 	go func() {
-		reports, err := s.diagnostics(uri)
+		reports, err := diagnostics(s.view, uri)
 		if err == nil {
 			for filename, diagnostics := range reports {
 				s.client.PublishDiagnostics(ctx, &protocol.PublishDiagnosticsParams{
-					URI:         filenameToURI(filename),
+					URI:         source.ToURI(filename),
 					Diagnostics: diagnostics,
 				})
 			}
@@ -140,12 +142,19 @@ func (s *server) DidSave(context.Context, *protocol.DidSaveTextDocumentParams) e
 }
 
 func (s *server) DidClose(ctx context.Context, params *protocol.DidCloseTextDocumentParams) error {
-	s.clearActiveFile(params.TextDocument.URI)
+	s.view.GetFile(params.TextDocument.URI).SetContent(nil)
 	return nil
 }
 
-func (s *server) Completion(context.Context, *protocol.CompletionParams) (*protocol.CompletionList, error) {
-	return nil, notImplemented("Completion")
+func (s *server) Completion(ctx context.Context, params *protocol.CompletionParams) (*protocol.CompletionList, error) {
+	items, err := completion(s.view, params.TextDocument.URI, params.Position)
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.CompletionList{
+		IsIncomplete: false,
+		Items:        items,
+	}, nil
 }
 
 func (s *server) CompletionResolve(context.Context, *protocol.CompletionItem) (*protocol.CompletionItem, error) {
@@ -213,11 +222,11 @@ func (s *server) ColorPresentation(context.Context, *protocol.ColorPresentationP
 }
 
 func (s *server) Formatting(ctx context.Context, params *protocol.DocumentFormattingParams) ([]protocol.TextEdit, error) {
-	return s.format(params.TextDocument.URI, nil)
+	return formatRange(s.view, params.TextDocument.URI, nil)
 }
 
 func (s *server) RangeFormatting(ctx context.Context, params *protocol.DocumentRangeFormattingParams) ([]protocol.TextEdit, error) {
-	return s.format(params.TextDocument.URI, &params.Range)
+	return formatRange(s.view, params.TextDocument.URI, &params.Range)
 }
 
 func (s *server) OnTypeFormatting(context.Context, *protocol.DocumentOnTypeFormattingParams) ([]protocol.TextEdit, error) {

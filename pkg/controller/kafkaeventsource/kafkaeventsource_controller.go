@@ -56,7 +56,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 
 	// TODO(user): Modify this to be the types you create that are owned by the primary resource
 	// Watch for changes to secondary resource Pods and requeue the owner KafkaEventSource
-	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
+	err = c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &sourcesv1alpha1.KafkaEventSource{},
 	})
@@ -78,19 +78,22 @@ type ReconcileKafkaEventSource struct {
 	scheme        *runtime.Scheme
 }
 
+
+func (r *ReconcileKafkaEventSource) InjectConfig(c *rest.Config) error {
+	var err error
+	r.dynamicClient, err = dynamic.NewForConfig(c)
+	return err
+}
+
 // Reconcile reads that state of the cluster for a KafkaEventSource object and makes changes based on the state read
 // and what is in the KafkaEventSource.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  This example creates
-// a Pod as an example
-// Note:
-// The Controller will requeue the Request to be processed again if the returned error is non-nil or
-// Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileKafkaEventSource) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	log.Printf("Reconciling KafkaEventSource %s/%s\n", request.Namespace, request.Name)
 
-	// Fetch the KafkaEventSource instance
-	instance := &sourcesv1alpha1.KafkaEventSource{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
+	// Fetch the KafkaEventSource
+	kafkaEventSource := &sourcesv1alpha1.KafkaEventSource{}
+
+	err := r.client.Get(context.TODO(), request.NamespacedName, kafkaEventSource)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -102,23 +105,25 @@ func (r *ReconcileKafkaEventSource) Reconcile(request reconcile.Request) (reconc
 		return reconcile.Result{}, err
 	}
 
-	// Define a new Pod object
-	dep := deploymentForKafka(instance)
 
-	// Set KafkaEventSource instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, dep, r.scheme); err != nil {
+	//Resolve the SinkURI
+	//todo: how to update status - r.client.Update fails because TransitionTime not set
+	kafkaEventSource.Status.InitializeConditions()
+	sinkURI, err := sinks.GetSinkURI(r.dynamicClient, kafkaEventSource.Spec.Sink, kafkaEventSource.Namespace)
+	if err != nil {
+		kafkaEventSource.Status.MarkNoSink("NotFound", "")
+	}
+	kafkaEventSource.Status.MarkSink(sinkURI)
+
+	// Create a new deployment for this EventSource
+	dep := deploymentForKafka(kafkaEventSource)
+
+	// Set KafkaEventSource kafkaEventSource as the owner and controller
+	if err := controllerutil.SetControllerReference(kafkaEventSource, dep, r.scheme); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	r.dynamicClient, _ = dynamic.NewForConfig(&rest.Config{})
-
-	sinkURI, err := sinks.GetSinkURI(r.dynamicClient, instance.Spec.Sink, instance.Namespace)
-	if err != nil {
-		instance.Status.MarkNoSink("NotFound", "")
-	}
-	instance.Status.MarkSink(sinkURI)
-
-	// Check if this Pod already exists
+	// Check if this Deployment already exists
 	found := &appsv1.Deployment{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: dep.Name, Namespace: dep.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
@@ -128,14 +133,16 @@ func (r *ReconcileKafkaEventSource) Reconcile(request reconcile.Request) (reconc
 			return reconcile.Result{}, err
 		}
 
-		// Pod created successfully - don't requeue
+		// Deployment created successfully - don't requeue
 		return reconcile.Result{}, nil
 	} else if err != nil {
 		return reconcile.Result{}, err
 	}
 
-	// Pod already exists - don't requeue
-	log.Printf("Skip reconcile: Pod %s/%s already exists", found.Namespace, found.Name)
+	//todo: Check to see if it needs updating
+
+	// Deployment already exists and de- don't requeue
+	log.Printf("Skip reconcile: Deployment %s/%s already exists", found.Namespace, found.Name)
 	return reconcile.Result{}, nil
 }
 
@@ -173,6 +180,10 @@ func deploymentForKafka(kes *sourcesv1alpha1.KafkaEventSource) *appsv1.Deploymen
 							{
 								Name:  "KAFKA_TOPIC",
 								Value: kes.Spec.Topic,
+							},
+							{
+								Name: "TARGET",
+								Value: kes.Status.SinkURI,
 							},
 						},
 					}},

@@ -2,10 +2,10 @@ package main
 
 import (
 	"flag"
+	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"log"
 	"runtime"
 
-	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	sdkVersion "github.com/operator-framework/operator-sdk/version"
 	"github.com/rh-event-flow-incubator/kafkaeventsource-operator/pkg/apis"
 	"github.com/rh-event-flow-incubator/kafkaeventsource-operator/pkg/controller"

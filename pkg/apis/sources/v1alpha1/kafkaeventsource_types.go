@@ -11,6 +11,9 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 const (
 	// KubernetesEventSourceConditionReady has status True when the
 	// source is ready to send events.
@@ -52,6 +55,22 @@ func (s *KafkaEventSourceStatus) MarkUnready(reason, messageFormat string, messa
 	kafkaEventSourceCondSet.Manage(s).MarkFalse(KafkaEventSourceConditionReady, reason, messageFormat, messageA...)
 }
 
+// MarkSink sets the condition that the source has a sink configured.
+func (s *KafkaEventSourceStatus) MarkSink(uri string) {
+	s.SinkURI = uri
+	if len(uri) > 0 {
+		kafkaEventSourceCondSet.Manage(s).MarkTrue(KafkaEventSourceConditionReady)
+	} else {
+		kafkaEventSourceCondSet.Manage(s).MarkUnknown(KafkaEventSourceConditionReady, "SinkEmpty", "Sink has resolved to empty.%s", "")
+	}
+}
+
+// MarkNoSink sets the condition that the source does not have a sink configured.
+func (s *KafkaEventSourceStatus) MarkNoSink(reason, messageFormat string, messageA ...interface{}) {
+	kafkaEventSourceCondSet.Manage(s).MarkFalse(KafkaEventSourceConditionReady, reason, messageFormat, messageA...)
+}
+
+
 // KafkaEventSourceSpec defines the desired state of KafkaEventSource
 type KafkaEventSourceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -66,11 +85,14 @@ type KafkaEventSourceSpec struct {
 
 // KafkaEventSourceStatus defines the observed state of KafkaEventSource
 type KafkaEventSourceStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 
+	// Conditions holds the state of a source at a point in time.
+	// +optional
+	// +patchMergeKey=type
+	// +patchStrategy=merge
 	Conditions duckv1alpha1.Conditions `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 
+	// +optional
 	SinkURI string `json:"sinkUri,omitempty"`
 }
 
