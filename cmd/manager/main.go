@@ -25,6 +25,8 @@ func main() {
 	printVersion()
 	flag.Parse()
 
+	//todo: uncomment
+	//namespace := "myproject"
 	namespace, err := k8sutil.GetWatchNamespace()
 	if err != nil {
 		log.Fatalf("failed to get watch namespace: %v", err)

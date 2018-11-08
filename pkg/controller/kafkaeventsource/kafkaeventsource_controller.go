@@ -78,7 +78,6 @@ type ReconcileKafkaEventSource struct {
 	scheme        *runtime.Scheme
 }
 
-
 func (r *ReconcileKafkaEventSource) InjectConfig(c *rest.Config) error {
 	var err error
 	r.dynamicClient, err = dynamic.NewForConfig(c)
@@ -104,7 +103,6 @@ func (r *ReconcileKafkaEventSource) Reconcile(request reconcile.Request) (reconc
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
-
 
 	//Resolve the SinkURI
 	//todo: how to update status - r.client.Update fails because TransitionTime not set
@@ -166,6 +164,9 @@ func deploymentForKafka(kes *sourcesv1alpha1.KafkaEventSource) *appsv1.Deploymen
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						"sidecar.istio.io/inject": "true",
+					},
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
@@ -182,7 +183,7 @@ func deploymentForKafka(kes *sourcesv1alpha1.KafkaEventSource) *appsv1.Deploymen
 								Value: kes.Spec.Topic,
 							},
 							{
-								Name: "TARGET",
+								Name:  "TARGET",
 								Value: kes.Status.SinkURI,
 							},
 						},
