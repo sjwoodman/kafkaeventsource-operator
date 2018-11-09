@@ -45,7 +45,7 @@ The sample connects to a [Strimzi](http://strimzi.io/quickstarts/okd/) Kafka Bro
     kubectl create -f sample/02-eventsource.yaml
     ko apply -f sample/03-service.yaml
     kubectl create -f sample/subscription.yaml
-    ``    `
+    ```
 
 1. Verify that the EventSource has been started
 
