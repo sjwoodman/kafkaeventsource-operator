@@ -2,9 +2,11 @@ package kafkaeventsource
 
 import (
 	"context"
+	"log"
+	"strconv"
+
 	"github.com/knative/eventing-sources/pkg/controller/sinks"
 	"k8s.io/client-go/rest"
-	"log"
 
 	sourcesv1alpha1 "github.com/rh-event-flow-incubator/kafkaeventsource-operator/pkg/apis/sources/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -149,6 +151,8 @@ func deploymentForKafka(kes *sourcesv1alpha1.KafkaEventSource) *appsv1.Deploymen
 		"app": kes.Name,
 	}
 
+	envvars := getEnvVars(kes)
+
 	dep := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
@@ -171,26 +175,70 @@ func deploymentForKafka(kes *sourcesv1alpha1.KafkaEventSource) *appsv1.Deploymen
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
-						Image: "sjwoodman/kafkaeventsource:latest",
-						Name:  "kafkaeventsource",
-						Env: []corev1.EnvVar{
-							{
-								Name:  "KAFKA_BOOTSTRAP_SERVERS",
-								Value: kes.Spec.Bootstrap,
-							},
-							{
-								Name:  "KAFKA_TOPIC",
-								Value: kes.Spec.Topic,
-							},
-							{
-								Name:  "TARGET",
-								Value: kes.Status.SinkURI,
-							},
-						},
+						Image:           "sjwoodman/kafkaeventsource:latest",
+						Name:            "kafkaeventsource",
+						ImagePullPolicy: "IfNotPresent",
+						Env:             envvars,
 					}},
 				},
 			},
 		},
 	}
 	return dep
+}
+
+func getEnvVars(kes *sourcesv1alpha1.KafkaEventSource) []corev1.EnvVar {
+
+	var ev = []corev1.EnvVar{}
+
+	addStrIfNotEmpty(&ev, kes.Spec.Bootstrap, "KAFKA_BOOTSTRAP_SERVERS")
+	addStrIfNotEmpty(&ev, kes.Spec.Topic, "KAFKA_TOPIC")
+	addStrIfNotEmpty(&ev, kes.Status.SinkURI, "TARGET")
+	addStrIfNotEmpty(&ev, kes.Spec.ConsumerGroupID, "CONSUMER_GROUP_ID")
+	addIntIfNotEmpty(&ev, kes.Spec.Net.MaxOpenRequests, "NET_MAX_OPEN_REQUESTS")
+	addIntIfNotEmpty(&ev, kes.Spec.Net.KeepAlive, "NET_KEEPALIVE")
+	addBoolIfNotEmpty(&ev, kes.Spec.Net.Sasl.Enable, "NET_SASL_ENABLED")
+	addBoolIfNotEmpty(&ev, kes.Spec.Net.Sasl.Handshake, "NET_SASL_HANDSHAKE")
+	addStrIfNotEmpty(&ev, kes.Spec.Net.Sasl.User, "NET_SASL_USER")
+	addStrIfNotEmpty(&ev, kes.Spec.Net.Sasl.Password, "NET_SASL_PASSWORD")
+	addIntIfNotEmpty(&ev, kes.Spec.Consumer.MaxWaitTime, "CONSUMER_MAX_WAIT_TIME")
+	addIntIfNotEmpty(&ev, kes.Spec.Consumer.MaxProcessingTime, "CONSUMER_MAX_PROCESSING_TIME")
+	addIntIfNotEmpty(&ev, kes.Spec.Consumer.Offsets.CommitInterval, "CONSUMER_OFFSETS_COMMIT_INTERVAL")
+	addIntIfNotEmpty(&ev, kes.Spec.Consumer.Offsets.Retention, "CONSUMER_OFFSETS_RETENTION")
+	addStrIfNotEmpty(&ev, kes.Spec.Consumer.Offsets.InitialOffset, "CONSUMER_OFFSETS_INITIAL")
+	addIntIfNotEmpty(&ev, kes.Spec.Consumer.Offsets.Retry.Max, "CONSUMER_OFFSETS_RETRY_MAX")
+	addIntIfNotEmpty(&ev, kes.Spec.ChannelBufferSize, "CHANNEL_BUFFER_SIZE")
+	addStrIfNotEmpty(&ev, kes.Spec.Group.PartitionStrategy, "GROUP_PARTITION_STRATEGY")
+	addIntIfNotEmpty(&ev, kes.Spec.Group.Session.Timeout, "GROUP_SESSION_TIMEOUT")
+
+	return ev
+}
+
+func addStrIfNotEmpty(evs *[]corev1.EnvVar, yamlKey string, evKey string) {
+
+	if yamlKey != "" {
+		*evs = append(*evs, corev1.EnvVar{
+			Name:  evKey,
+			Value: yamlKey,
+		})
+	}
+}
+
+func addIntIfNotEmpty(evs *[]corev1.EnvVar, yamlKey int64, evKey string) {
+
+	if yamlKey != 0 {
+		*evs = append(*evs, corev1.EnvVar{
+			Name:  evKey,
+			Value: strconv.FormatInt(yamlKey, 10),
+		})
+	}
+}
+
+func addBoolIfNotEmpty(evs *[]corev1.EnvVar, yamlKey bool, evKey string) {
+	if yamlKey != false {
+		*evs = append(*evs, corev1.EnvVar{
+			Name:  evKey,
+			Value: strconv.FormatBool(yamlKey),
+		})
+	}
 }

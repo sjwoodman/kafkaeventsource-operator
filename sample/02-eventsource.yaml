@@ -5,8 +5,33 @@ metadata:
 spec:
   bootstrap: my-cluster-kafka-bootstrap.myproject.svc.cluster.local:9092
   topic: test
+  consumerGroupID: group1
+  replicas: 3
+  net:
+    maxOpenRequests: 5
+    keepAlive: 0
+    sasl:
+      enable: true
+      handshake: false
+      user: simon
+      password: letmein
+  consumer:
+    maxWaitTime: 250000000
+    maxProcessingTime: 100000000
+    offsets:  
+      commitInterval: 1000000000
+      initial: OffsetOldest
+      retention: 0
+      retry:
+        max: 3
+  channelBufferSize: 256
+  group:
+    partitionStrategy: range  
+    session:
+      timeout: 30000000000
   sink:
     apiVersion: eventing.knative.dev/v1alpha1
     kind: Channel
-    name: testchannel
+    name: hchannel
+    
 

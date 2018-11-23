@@ -83,18 +83,6 @@ extractQueries:
 		}
 	}
 	patterns = restPatterns
-	// Look for the deprecated contains: syntax.
-	// TODO(matloob): delete this around mid-October 2018.
-	restPatterns = restPatterns[:0]
-	for _, pattern := range patterns {
-		if strings.HasPrefix(pattern, "contains:") {
-			containFile := strings.TrimPrefix(pattern, "contains:")
-			containFiles = append(containFiles, containFile)
-		} else {
-			restPatterns = append(restPatterns, pattern)
-		}
-	}
-	containFiles = absJoin(cfg.Dir, containFiles)
 
 	// TODO(matloob): Remove the definition of listfunc and just use golistPackages once go1.12 is released.
 	var listfunc driver
@@ -125,7 +113,8 @@ extractQueries:
 	if sizeserr != nil {
 		return nil, sizeserr
 	}
-	response.Sizes = sizes
+	// types.SizesFor always returns nil or a *types.StdSizes
+	response.Sizes, _ = sizes.(*types.StdSizes)
 
 	if len(containFiles) == 0 && len(packagesNamed) == 0 {
 		return response, nil
@@ -559,6 +548,17 @@ func golistDriverCurrent(cfg *Config, words ...string) (*driverResponse, error) 
 			OtherFiles:      absJoin(p.Dir, otherFiles(p)...),
 		}
 
+		// Workaround for github.com/golang/go/issues/28749.
+		// TODO(adonovan): delete before go1.12 release.
+		out := pkg.CompiledGoFiles[:0]
+		for _, f := range pkg.CompiledGoFiles {
+			if strings.HasSuffix(f, ".s") {
+				continue
+			}
+			out = append(out, f)
+		}
+		pkg.CompiledGoFiles = out
+
 		// Extract the PkgPath from the package's ID.
 		if i := strings.IndexByte(pkg.ID, ' '); i >= 0 {
 			pkg.PkgPath = pkg.ID[:i]
@@ -605,7 +605,9 @@ func golistDriverCurrent(cfg *Config, words ...string) (*driverResponse, error) 
 			response.Roots = append(response.Roots, pkg.ID)
 		}
 
-		// TODO(matloob): Temporary hack since CompiledGoFiles isn't always set.
+		// Work around for pre-go.1.11 versions of go list.
+		// TODO(matloob): they should be handled by the fallback.
+		// Can we delete this?
 		if len(pkg.CompiledGoFiles) == 0 {
 			pkg.CompiledGoFiles = pkg.GoFiles
 		}

@@ -6,6 +6,7 @@ package lsp
 
 import (
 	"context"
+	"go/token"
 	"os"
 	"sync"
 
@@ -42,14 +43,18 @@ func (s *server) Initialize(ctx context.Context, params *protocol.InitializePara
 	s.initialized = true
 	return &protocol.InitializeResult{
 		Capabilities: protocol.ServerCapabilities{
+			CompletionProvider: protocol.CompletionOptions{
+				TriggerCharacters: []string{"."},
+			},
+			DefinitionProvider:              true,
+			DocumentFormattingProvider:      true,
+			DocumentRangeFormattingProvider: true,
+			SignatureHelpProvider: protocol.SignatureHelpOptions{
+				TriggerCharacters: []string{"("},
+			},
 			TextDocumentSync: protocol.TextDocumentSyncOptions{
 				Change:    float64(protocol.Full), // full contents of file sent on each update
 				OpenClose: true,
-			},
-			DocumentFormattingProvider:      true,
-			DocumentRangeFormattingProvider: true,
-			CompletionProvider: protocol.CompletionOptions{
-				TriggerCharacters: []string{"."},
 			},
 		},
 	}, nil
@@ -114,16 +119,19 @@ func (s *server) DidChange(ctx context.Context, params *protocol.DidChangeTextDo
 }
 
 func (s *server) cacheAndDiagnoseFile(ctx context.Context, uri protocol.DocumentURI, text string) {
-	s.view.GetFile(uri).SetContent([]byte(text))
+	f := s.view.GetFile(source.URI(uri))
+	f.SetContent([]byte(text))
 	go func() {
-		reports, err := diagnostics(s.view, uri)
-		if err == nil {
-			for filename, diagnostics := range reports {
-				s.client.PublishDiagnostics(ctx, &protocol.PublishDiagnosticsParams{
-					URI:         source.ToURI(filename),
-					Diagnostics: diagnostics,
-				})
-			}
+		f := s.view.GetFile(source.URI(uri))
+		reports, err := source.Diagnostics(ctx, s.view, f)
+		if err != nil {
+			return // handle error?
+		}
+		for filename, diagnostics := range reports {
+			s.client.PublishDiagnostics(ctx, &protocol.PublishDiagnosticsParams{
+				URI:         protocol.DocumentURI(source.ToURI(filename)),
+				Diagnostics: toProtocolDiagnostics(s.view, diagnostics),
+			})
 		}
 	}()
 }
@@ -142,18 +150,24 @@ func (s *server) DidSave(context.Context, *protocol.DidSaveTextDocumentParams) e
 }
 
 func (s *server) DidClose(ctx context.Context, params *protocol.DidCloseTextDocumentParams) error {
-	s.view.GetFile(params.TextDocument.URI).SetContent(nil)
+	s.view.GetFile(source.URI(params.TextDocument.URI)).SetContent(nil)
 	return nil
 }
 
 func (s *server) Completion(ctx context.Context, params *protocol.CompletionParams) (*protocol.CompletionList, error) {
-	items, err := completion(s.view, params.TextDocument.URI, params.Position)
+	f := s.view.GetFile(source.URI(params.TextDocument.URI))
+	tok, err := f.GetToken()
+	if err != nil {
+		return nil, err
+	}
+	pos := fromProtocolPosition(tok, params.Position)
+	items, err := source.Completion(ctx, f, pos)
 	if err != nil {
 		return nil, err
 	}
 	return &protocol.CompletionList{
 		IsIncomplete: false,
-		Items:        items,
+		Items:        toProtocolCompletionItems(items),
 	}, nil
 }
 
@@ -165,12 +179,32 @@ func (s *server) Hover(context.Context, *protocol.TextDocumentPositionParams) (*
 	return nil, notImplemented("Hover")
 }
 
-func (s *server) SignatureHelp(context.Context, *protocol.TextDocumentPositionParams) (*protocol.SignatureHelp, error) {
-	return nil, notImplemented("SignatureHelp")
+func (s *server) SignatureHelp(ctx context.Context, params *protocol.TextDocumentPositionParams) (*protocol.SignatureHelp, error) {
+	f := s.view.GetFile(source.URI(params.TextDocument.URI))
+	tok, err := f.GetToken()
+	if err != nil {
+		return nil, err
+	}
+	pos := fromProtocolPosition(tok, params.Position)
+	info, err := source.SignatureHelp(ctx, f, pos)
+	if err != nil {
+		return nil, err
+	}
+	return toProtocolSignatureHelp(info), nil
 }
 
-func (s *server) Definition(context.Context, *protocol.TextDocumentPositionParams) ([]protocol.Location, error) {
-	return nil, notImplemented("Definition")
+func (s *server) Definition(ctx context.Context, params *protocol.TextDocumentPositionParams) ([]protocol.Location, error) {
+	f := s.view.GetFile(source.URI(params.TextDocument.URI))
+	tok, err := f.GetToken()
+	if err != nil {
+		return nil, err
+	}
+	pos := fromProtocolPosition(tok, params.Position)
+	r, err := source.Definition(ctx, f, pos)
+	if err != nil {
+		return nil, err
+	}
+	return []protocol.Location{toProtocolLocation(s.view.Config.Fset, r)}, nil
 }
 
 func (s *server) TypeDefinition(context.Context, *protocol.TextDocumentPositionParams) ([]protocol.Location, error) {
@@ -222,11 +256,46 @@ func (s *server) ColorPresentation(context.Context, *protocol.ColorPresentationP
 }
 
 func (s *server) Formatting(ctx context.Context, params *protocol.DocumentFormattingParams) ([]protocol.TextEdit, error) {
-	return formatRange(s.view, params.TextDocument.URI, nil)
+	return formatRange(ctx, s.view, params.TextDocument.URI, nil)
 }
 
 func (s *server) RangeFormatting(ctx context.Context, params *protocol.DocumentRangeFormattingParams) ([]protocol.TextEdit, error) {
-	return formatRange(s.view, params.TextDocument.URI, &params.Range)
+	return formatRange(ctx, s.view, params.TextDocument.URI, &params.Range)
+}
+
+// formatRange formats a document with a given range.
+func formatRange(ctx context.Context, v *source.View, uri protocol.DocumentURI, rng *protocol.Range) ([]protocol.TextEdit, error) {
+	f := v.GetFile(source.URI(uri))
+	tok, err := f.GetToken()
+	if err != nil {
+		return nil, err
+	}
+	var r source.Range
+	if rng == nil {
+		r.Start = tok.Pos(0)
+		r.End = tok.Pos(tok.Size())
+	} else {
+		r = fromProtocolRange(tok, *rng)
+	}
+	edits, err := source.Format(ctx, f, r)
+	if err != nil {
+		return nil, err
+	}
+	return toProtocolEdits(tok, edits), nil
+}
+
+func toProtocolEdits(f *token.File, edits []source.TextEdit) []protocol.TextEdit {
+	if edits == nil {
+		return nil
+	}
+	result := make([]protocol.TextEdit, len(edits))
+	for i, edit := range edits {
+		result[i] = protocol.TextEdit{
+			Range:   toProtocolRange(f, edit.Range),
+			NewText: edit.NewText,
+		}
+	}
+	return result
 }
 
 func (s *server) OnTypeFormatting(context.Context, *protocol.DocumentOnTypeFormattingParams) ([]protocol.TextEdit, error) {

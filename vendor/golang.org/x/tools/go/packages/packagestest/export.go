@@ -58,7 +58,7 @@ type Exported struct {
 	written  map[string]map[string]string // the full set of exported files
 	fset     *token.FileSet               // The file set used when parsing expectations
 	notes    []*expect.Note               // The list of expectations extracted from go source files
-	markers  map[string]marker            // The set of markers extracted from go source files
+	markers  map[string]Range             // The set of markers extracted from go source files
 	contents map[string][]byte
 }
 
@@ -103,7 +103,7 @@ func TestAll(t *testing.T, f func(*testing.T, Exporter)) {
 // The file deletion in the cleanup can be skipped by setting the skip-cleanup
 // flag when invoking the test, allowing the temporary directory to be left for
 // debugging tests.
-func Export(t *testing.T, exporter Exporter, modules []Module) *Exported {
+func Export(t testing.TB, exporter Exporter, modules []Module) *Exported {
 	t.Helper()
 	dirname := strings.Replace(t.Name(), "/", "_", -1)
 	dirname = strings.Replace(dirname, "#", "_", -1) // duplicate subtests get a #NNN suffix.
