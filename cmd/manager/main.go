@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
+	// "github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"log"
 	"runtime"
 
@@ -26,7 +26,7 @@ func main() {
 	flag.Parse()
 
 	//todo: uncomment
-	//namespace := "myproject"
+	// namespace := "myproject"
 	namespace, err := k8sutil.GetWatchNamespace()
 	if err != nil {
 		log.Fatalf("failed to get watch namespace: %v", err)

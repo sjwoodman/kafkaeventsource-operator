@@ -226,6 +226,7 @@ func addStrIfNotEmpty(evs *[]corev1.EnvVar, yamlKey string, evKey string) {
 
 func addIntIfNotEmpty(evs *[]corev1.EnvVar, yamlKey int64, evKey string) {
 
+	//todo: Need to deal with settings which *should* be zero
 	if yamlKey != 0 {
 		*evs = append(*evs, corev1.EnvVar{
 			Name:  evKey,
@@ -235,6 +236,8 @@ func addIntIfNotEmpty(evs *[]corev1.EnvVar, yamlKey int64, evKey string) {
 }
 
 func addBoolIfNotEmpty(evs *[]corev1.EnvVar, yamlKey bool, evKey string) {
+
+	//todo: Need to deal with settings that *should* be false
 	if yamlKey != false {
 		*evs = append(*evs, corev1.EnvVar{
 			Name:  evKey,
