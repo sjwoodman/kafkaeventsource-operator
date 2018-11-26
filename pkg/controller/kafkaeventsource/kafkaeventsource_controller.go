@@ -3,6 +3,7 @@ package kafkaeventsource
 import (
 	"context"
 	"log"
+	"reflect"
 	"strconv"
 
 	"github.com/knative/eventing-sources/pkg/controller/sinks"
@@ -13,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -80,6 +82,7 @@ type ReconcileKafkaEventSource struct {
 	scheme        *runtime.Scheme
 }
 
+// InjectConfig implemnts an interface which means the K8s config gets injected
 func (r *ReconcileKafkaEventSource) InjectConfig(c *rest.Config) error {
 	var err error
 	r.dynamicClient, err = dynamic.NewForConfig(c)
@@ -107,13 +110,17 @@ func (r *ReconcileKafkaEventSource) Reconcile(request reconcile.Request) (reconc
 	}
 
 	//Resolve the SinkURI
-	//todo: how to update status - r.client.Update fails because TransitionTime not set
-	kafkaEventSource.Status.InitializeConditions()
-	sinkURI, err := sinks.GetSinkURI(r.dynamicClient, kafkaEventSource.Spec.Sink, kafkaEventSource.Namespace)
-	if err != nil {
-		kafkaEventSource.Status.MarkNoSink("NotFound", "")
+	sinkURI := "Not found"
+	sinkURI, err = sinks.GetSinkURI(r.dynamicClient, kafkaEventSource.Spec.Sink, kafkaEventSource.Namespace)
+
+	if kafkaEventSource.Status.SinkURI != sinkURI {
+		kafkaEventSource.Status.SinkURI = sinkURI
+		err = r.client.Update(context.TODO(), kafkaEventSource)
+		if err != nil {
+			log.Printf("failed to update KafkaEventSource status:, %s", err)
+			return reconcile.Result{}, err
+		}
 	}
-	kafkaEventSource.Status.MarkSink(sinkURI)
 
 	// Create a new deployment for this EventSource
 	dep := deploymentForKafka(kafkaEventSource)
@@ -139,18 +146,50 @@ func (r *ReconcileKafkaEventSource) Reconcile(request reconcile.Request) (reconc
 		return reconcile.Result{}, err
 	}
 
-	//todo: Check to see if it needs updating
+	// Ensure the deployment size is the same as the spec
+	size := kafkaEventSource.Spec.Replicas
+	if *found.Spec.Replicas != size {
+		found.Spec.Replicas = &size
+		err = r.client.Update(context.TODO(), found)
+		if err != nil {
+			log.Printf("Failed to update Deployment: %s", found.Name)
+			return reconcile.Result{}, err
+		}
+		// Spec updated - return and requeue
+		return reconcile.Result{Requeue: true}, nil
+	}
 
-	// Deployment already exists and de- don't requeue
+	// Update the KafkaEventSource status with the pod names
+	// List the pods for this event source's deployment
+	podList := &corev1.PodList{}
+	labelSelector := labels.SelectorFromSet(labelsForKafkaEventSource(kafkaEventSource.Name))
+	listOps := &client.ListOptions{Namespace: kafkaEventSource.Namespace, LabelSelector: labelSelector}
+	err = r.client.List(context.TODO(), listOps, podList)
+	if err != nil {
+		log.Printf("Failed to list pods when reconciling KafkaEventSource: %s", kafkaEventSource.Name)
+		return reconcile.Result{}, err
+	}
+
+	podNames := getPodNames(podList.Items)
+
+	// Update status.Nodes if needed
+	if !reflect.DeepEqual(podNames, kafkaEventSource.Status.Nodes) {
+		kafkaEventSource.Status.Nodes = podNames
+		err := r.client.Update(context.TODO(), kafkaEventSource)
+		if err != nil {
+			log.Printf("failed to update KafkaEventSource status:, %s", err)
+			return reconcile.Result{}, err
+		}
+	}
+
+	// Deployment already exists don't requeue
 	log.Printf("Skip reconcile: Deployment %s/%s already exists", found.Namespace, found.Name)
 	return reconcile.Result{}, nil
 }
 
 func deploymentForKafka(kes *sourcesv1alpha1.KafkaEventSource) *appsv1.Deployment {
-	labels := map[string]string{
-		"app": kes.Name,
-	}
-
+	labels := labelsForKafkaEventSource(kes.Name)
+	replicas := kes.Spec.Replicas
 	envvars := getEnvVars(kes)
 
 	dep := &appsv1.Deployment{
@@ -163,6 +202,7 @@ func deploymentForKafka(kes *sourcesv1alpha1.KafkaEventSource) *appsv1.Deploymen
 			Namespace: kes.Namespace,
 		},
 		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
@@ -244,4 +284,19 @@ func addBoolIfNotEmpty(evs *[]corev1.EnvVar, yamlKey bool, evKey string) {
 			Value: strconv.FormatBool(yamlKey),
 		})
 	}
+}
+
+// labelsForKafkaEventSource returns the labels for selecting the resources
+// belonging to the given memcached CR name.
+func labelsForKafkaEventSource(name string) map[string]string {
+	return map[string]string{"app": "kafkaeventsource", "kafkaeventsource_cr": name}
+}
+
+// getPodNames returns the pod names of the array of pods passed in
+func getPodNames(pods []corev1.Pod) []string {
+	var podNames []string
+	for _, pod := range pods {
+		podNames = append(podNames, pod.Name)
+	}
+	return podNames
 }

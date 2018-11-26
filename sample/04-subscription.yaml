@@ -1,16 +1,16 @@
 apiVersion: eventing.knative.dev/v1alpha1
 kind: Subscription
 metadata:
-  name: ktestevents-subscription
+  name: testeventssubscription
   namespace: myproject
 spec:
   channel:
     apiVersion: eventing.knative.dev/v1alpha1
     kind: Channel
-    name: hchannel
+    name: testchannel
   subscriber:
     ref:
       apiVersion: serving.knative.dev/v1alpha1
       kind: Service
-      name: k-message-dumper
+      name: message-dumper
 

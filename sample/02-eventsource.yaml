@@ -4,9 +4,9 @@ metadata:
   name: example-kafkaeventsource
 spec:
   bootstrap: my-cluster-kafka-bootstrap.myproject.svc.cluster.local:9092
-  topic: test
+  topic: footopic
   consumerGroupID: group1
-  replicas: 3
+  replicas: 1
   net:
     maxOpenRequests: 5
     keepAlive: 0
@@ -20,7 +20,7 @@ spec:
     maxProcessingTime: 100000000
     offsets:  
       commitInterval: 1000000000
-      initial: OffsetOldest
+      initial: OffsetNewest
       retention: 0
       retry:
         max: 3
@@ -32,6 +32,6 @@ spec:
   sink:
     apiVersion: eventing.knative.dev/v1alpha1
     kind: Channel
-    name: hchannel
+    name: testchannel
     
 

@@ -246,7 +246,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:daf111934b00489cc113e33f176f1cfaa847b64f8c5b2e18719f1abbc0c8224f"
+  digest = "1:8335c9f5cea7d488273f172f063d7abc8b62271cfd78baa6054acdd2f229701d"
   name = "github.com/knative/pkg"
   packages = [
     "apis",
@@ -254,7 +254,7 @@
     "apis/duck/v1alpha1",
   ]
   pruneopts = "NT"
-  revision = "a5c260df2a830d8f90f82518d9d7e35c4d74c517"
+  revision = "acfd173abd8d2063ddceedb3487599f97ac93db8"
 
 [[projects]]
   branch = "master"
@@ -294,14 +294,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:963cba4c82e9a577f07bb8f78b95d35ba8d26da98ad17e9a7ecf212756d5cfbe"
+  digest = "1:0d00888f3a9fc3e98000280cbcfc47c5173fabb331b836a48f53cc76545faa12"
   name = "github.com/operator-framework/operator-sdk"
-  packages = [
-    "pkg/k8sutil",
-    "version",
-  ]
+  packages = ["version"]
   pruneopts = "NT"
-  revision = "4a9d5a5b0901b24679d36dced0a186c525e1bffd"
+  revision = "28401acc96452170cbe3d3fffcbb5a9a2b75dd64"
 
 [[projects]]
   digest = "1:93b1d84c5fa6d1ea52f4114c37714cddd84d5b78f151b62bb101128dd51399bf"
@@ -368,11 +365,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:417055c259ab65cfeacd7d0bf0b039c2809e80300cf0894937ff4eec2c5a866a"
+  digest = "1:e3833763dfbc6bcaba675ecfd86e392eff386f227675688983e69019cde6a188"
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
   pruneopts = "NT"
-  revision = "3d3f9f413869b949e48070b5bc593aa22cc2b8f2"
+  revision = "9eb0be3963eaeb646c9a9b6d11f3da2b249bb2ca"
 
 [[projects]]
   branch = "master"
@@ -391,7 +388,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:948ab99b3a990ee11c6beb2d9e65217961897cbc0842acb57aad3d9f63c28f7e"
+  digest = "1:d25e419b2334aeb766bd3ed55ad61c9e85f82a46b53fc38d31ce909252dab20a"
   name = "golang.org/x/oauth2"
   packages = [
     ".",
@@ -401,18 +398,18 @@
     "jwt",
   ]
   pruneopts = "NT"
-  revision = "f42d05182288abf10faef86d16c0d07b8d40ea2d"
+  revision = "8f65e3013ebad444f13bc19536f7865efc793816"
 
 [[projects]]
   branch = "master"
-  digest = "1:d2b41dcca28b5db7c449fe9abb931217766959c9c784403be8ecdf156191188e"
+  digest = "1:478c51e86c9a8a3681d8ab60317e1f9115e805c3288a08d9cecef33a5dda1c94"
   name = "golang.org/x/sys"
   packages = [
     "unix",
     "windows",
   ]
   pruneopts = "NT"
-  revision = "ec83556a53fe16b65c452a104ea9d1e86a671852"
+  revision = "62eef0e2fa9b2c385f7b2778e763486da6880d37"
 
 [[projects]]
   digest = "1:8c74f97396ed63cc2ef04ebb5fc37bb032871b8fd890a25991ed40974b00cd2a"
@@ -448,7 +445,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:6b54612b83c2f28e8eab7c17626ff79c3bbc0602ed2a901802e0c05ad7f4e616"
+  digest = "1:47efe3ab270e3717dd484f66108933f799a12c13dd4aa54fc88036d12ccaf957"
   name = "golang.org/x/tools"
   packages = [
     "go/ast/astutil",
@@ -457,7 +454,7 @@
     "internal/gopathwalk",
   ]
   pruneopts = "NT"
-  revision = "fc4f04983f629377122b333bebb16bfd5a5dcfed"
+  revision = "04b5d21e00f1f47bd824a6ade581e7189bacde87"
 
 [[projects]]
   digest = "1:2a4972ee51c3b9dfafbb3451fa0552e7a198d9d12c721bfc492050fe2f72e0f6"
@@ -770,12 +767,12 @@
     "github.com/knative/eventing-sources/pkg/controller/sinks",
     "github.com/knative/pkg/apis/duck",
     "github.com/knative/pkg/apis/duck/v1alpha1",
-    "github.com/operator-framework/operator-sdk/pkg/k8sutil",
     "github.com/operator-framework/operator-sdk/version",
     "k8s.io/api/apps/v1",
     "k8s.io/api/core/v1",
     "k8s.io/apimachinery/pkg/api/errors",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
+    "k8s.io/apimachinery/pkg/labels",
     "k8s.io/apimachinery/pkg/runtime",
     "k8s.io/apimachinery/pkg/runtime/schema",
     "k8s.io/apimachinery/pkg/types",
